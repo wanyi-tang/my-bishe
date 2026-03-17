@@ -1,0 +1,26 @@
+{
+  "name": "vue-tiptap-master",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@tiptap/starter-kit": "^3.20.1",
+    "@tiptap/vue-3": "^3.20.1",
+    "axios": "^1.13.6",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.30"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
