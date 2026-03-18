@@ -156,7 +156,7 @@
 import { useBookStore } from '../stores/books.js';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import BookCard from './BookCard.vue';
 import BookFilterPanel from './BookFilterPanel.vue';
 import AddBookDialog from './AddBookDialog.vue';
@@ -168,6 +168,9 @@ export default {
     AddBookDialog,
   },
   setup() {
+    onMounted(async () => {
+      await bookStore.fetchBooks();
+    });
     const bookStore = useBookStore();
     const { books, allGenres, allThemes, allTags, selectedGenres, selectedThemes, selectedTags } = storeToRefs(bookStore);
     const router = useRouter();

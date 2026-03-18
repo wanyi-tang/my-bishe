@@ -21,9 +21,9 @@ export const useBookStore = defineStore('books', () => {
     loading.value = true;
     error.value = null;
     try {
-      const response = await bookApi.getAllBooks(params);
-      books.value = response.data || [];
-      return response;
+      const data = await bookApi.getAllBooks(params);
+      books.value = data;
+      return data;
     } catch (err) {
       error.value = err.message;
       console.error('Failed to fetch books:', err);
@@ -37,8 +37,7 @@ export const useBookStore = defineStore('books', () => {
     loading.value = true;
     error.value = null;
     try {
-      const response = await bookApi.createBook(bookData);
-      const newBook = response.data;
+      const newBook = await bookApi.createBook(bookData);
       books.value.push(newBook);
       return newBook;
     } catch (err) {
@@ -54,8 +53,7 @@ export const useBookStore = defineStore('books', () => {
     loading.value = true;
     error.value = null;
     try {
-      const response = await bookApi.updateBook(id, updatedBook);
-      const book = response.data;
+      const book = await bookApi.updateBook(id, updatedBook);
       const index = books.value.findIndex(b => b._id === id || b.id === id);
       if (index !== -1) {
         books.value[index] = book;
@@ -74,7 +72,7 @@ export const useBookStore = defineStore('books', () => {
     loading.value = true;
     error.value = null;
     try {
-      const response = await bookApi.deleteBook(id);
+      await bookApi.deleteBook(id);
       books.value = books.value.filter(b => b._id !== id && b.id !== id);
     } catch (err) {
       error.value = err.message;

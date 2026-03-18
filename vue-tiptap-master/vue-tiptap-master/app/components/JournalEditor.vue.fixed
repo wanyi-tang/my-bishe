@@ -1,0 +1,418 @@
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import Editor from '../src/index.js';
+import { useJournalStore } from '../stores/journals.js';
+import { useBookStore } from '../stores/books.js';
+
+const route = useRoute();
+const router = useRouter();
+const journalStore = useJournalStore();
+const bookStore = useBookStore();
+
+const selectedBookId = ref(null);
+const currentContent = ref('');
+const currentTags = ref('');
+const currentJournalId = ref(null);
+
+// Computed properties for UI
+const books = computed(() => bookStore.books);
+const journals = computed(() => {
+  if (!selectedBookId.value) return [];
+  return journalStore.getJournalsByBook(selectedBookId.value);
+});
+
+const popularTags = computed(() => {
+  const tagCount = {};
+  journals.value.forEach((journal) => {
+    if (journal.tags && Array.isArray(journal.tags)) {
+      journal.tags.forEach((tag) => {
+        tagCount[tag] = (tagCount[tag] || 0) + 1;
+      });
+    }
+  });
+
+  return Object.entries(tagCount)
+    .map(([name, count]) => ({
+      name,
+      count,
+      size: Math.min(14 + count * 2, 24), // Dynamic font size based on count
+    }))
+    .sort((a, b) => b.count - a.count);
+});
+
+// Watch for book changes
+watch(selectedBookId, (newId) => {
+  if (newId) {
+    // Reset to new note mode
+    currentContent.value = '';
+    currentTags.value = '';
+    currentJournalId.value = null;
+  }
+});
+
+onBeforeRouteUpdate((to) => {
+  const newBookId = to.query.bookId;
+  if (newBookId && bookStore.books.some((book) => book.id == newBookId)) {
+    selectedBookId.value = newBookId;
+  }
+  currentContent.value = '';
+  currentTags.value = '';
+  currentJournalId.value = null;
+});
+
+const updateContent = (content) => {
+  currentContent.value = content;
+};
+
+const saveJournal = () => {
+  if (!selectedBookId.value || !currentContent.value.trim()) return;
+
+  // Support both Chinese and English commas, plus semicolons and newlines as separators
+  const tagSeparators = /[,,;\n]/;
+  const journalData = {
+    bookId: selectedBookId.value,
+    content: currentContent.value,
+    tags: currentTags.value
+      .split(tagSeparators)
+      .map((t) => t.trim())
+      .filter((t) => t),
+  };
+
+  if (currentJournalId.value) {
+    // Update existing journal
+    journalStore.updateJournal(currentJournalId.value, journalData);
+  } else {
+    // Create new journal
+    journalStore.addJournal(journalData);
+  }
+
+  // Reset for new note
+  currentContent.value = '';
+  currentTags.value = '';
+  currentJournalId.value = null;
+  
+  // Show success feedback
+  alert('笔记保存成功！');
+};
+
+const loadJournal = (journal) => {
+  currentContent.value = journal.content || '';
+  currentTags.value = journal.tags ? journal.tags.join(', ') : '';
+  currentJournalId.value = journal.id;
+};
+
+const deleteJournal = (id) => {
+  if (confirm('确定要删除这篇笔记吗？')) {
+    journalStore.deleteJournal(id);
+    if (currentJournalId.value === id) {
+      currentContent.value = '';
+      currentTags.value = '';
+      currentJournalId.value = null;
+    }
+  }
+};
+
+const selectTag = (tagName) => {
+  // Add tag to input if not already present
+  const tagSeparators = /[, , ;\n]/;
+  const existingTags = currentTags.value
+    .split(tagSeparators)
+    .map((t) => t.trim())
+    .filter((t) => t);
+
+  if (!existingTags.includes(tagName)) {
+    existingTags.push(tagName);
+    currentTags.value = existingTags.join(', ');
+  }
+};
+
+onMounted(() => {
+  // Initialize with URL params or defaults
+  if (route.query.bookId) {
+    selectedBookId.value = route.query.bookId;
+  } else if (books.value.length > 0) {
+    selectedBookId.value = books.value[0].id;
+  }
+});
+</script>
+
+<template>
+  <div class="journal-editor">
+    <!-- Book Selection -->
+    <div class="book-selector">
+      <label>选择笔记本：</label>
+      <select v-model="selectedBookId">
+        <option disabled value="">请选择笔记本</option>
+        <option v-for="book in books" :key="book.id" :value="book.id">
+          {{ book.title }}
+        </option>
+      </select>
+    </div>
+
+    <!-- Tag Input -->
+    <div class="tag-input-section">
+      <input
+        v-model="currentTags"
+        type="text"
+        placeholder="输入标签，用逗号或分号分隔（例如：学习，编程，日记）"
+        class="tag-input"
+      />
+      
+      <!-- Popular Tags Cloud -->
+      <div v-if="popularTags.length > 0" class="tags-cloud">
+        <span class="cloud-label">热门标签：</span>
+        <button
+          v-for="tag in popularTags.slice(0, 10)"
+          :key="tag.name"
+          @click="selectTag(tag.name)"
+          :style="{ fontSize: `${tag.size}px` }"
+          class="tag-btn"
+        >
+          {{ tag.name }} ({{ tag.count }})
+        </button>
+      </div>
+    </div>
+
+    <!-- Tiptap Editor -->
+    <Editor v-if="selectedBookId" v-model="currentContent" />
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button @click="saveJournal" :disabled="!selectedBookId" class="btn-save">
+        保存笔记
+      </button>
+      <button
+        v-if="currentJournalId"
+        @click="
+          currentContent = '';
+          currentTags = '';
+          currentJournalId = null;
+        "
+        class="btn-cancel"
+      >
+        取消编辑
+      </button>
+    </div>
+
+    <!-- Journal List -->
+    <div class="journal-list">
+      <h3>笔记列表</h3>
+      <div v-for="journal in journals" :key="journal.id" class="journal-item">
+        <div class="journal-header">
+          <span class="journal-date">{{
+            new Date(journal.date).toLocaleString()
+          }}</span>
+          <div class="journal-tags">
+            <span
+              v-for="tag in journal.tags"
+              :key="tag"
+              class="tag"
+              @click="selectTag(tag)"
+            >
+              #{{ tag }}
+            </span>
+          </div>
+        </div>
+        <div class="journal-preview">{{
+          journal.content.substring(0, 100)
+        }}...</div>
+        <div class="journal-actions">
+          <button @click="loadJournal(journal)" class="btn-edit">编辑</button>
+          <button @click="deleteJournal(journal.id)" class="btn-delete">
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped lang="scss">
+.journal-editor {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.book-selector {
+  margin-bottom: 1.5rem;
+
+  label {
+    margin-right: 1rem;
+    font-weight: bold;
+  }
+
+  select {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    min-width: 200px;
+  }
+}
+
+.tag-input-section {
+  margin-bottom: 1.5rem;
+}
+
+.tag-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tags-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+
+  .cloud-label {
+    font-weight: bold;
+    color: #666;
+    margin-right: 0.5rem;
+  }
+
+  .tag-btn {
+    background: none;
+    border: 1px solid #e0e0e0;
+    border-radius: 16px;
+    padding: 0.25rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #4a90e2;
+
+    &:hover {
+      background: #f0f7ff;
+      border-color: #4a90e2;
+    }
+  }
+}
+
+.action-buttons {
+  margin: 1.5rem 0;
+  display: flex;
+  gap: 1rem;
+
+  button {
+    padding: 0.75rem 2rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  .btn-save {
+    background: #4caf50;
+    color: white;
+
+    &:hover:not(:disabled) {
+      background: #45a049;
+    }
+  }
+
+  .btn-cancel {
+    background: #9e9e9e;
+    color: white;
+
+    &:hover {
+      background: #757575;
+    }
+  }
+}
+
+.journal-list {
+  margin-top: 2rem;
+
+  h3 {
+    margin-bottom: 1rem;
+    color: #333;
+  }
+}
+
+.journal-item {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+  .journal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .journal-date {
+    color: #999;
+    font-size: 0.875rem;
+  }
+
+  .journal-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+
+    .tag {
+      background: #f0f7ff;
+      color: #4a90e2;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      cursor: pointer;
+
+      &:hover {
+        background: #e0efff;
+      }
+    }
+  }
+
+  .journal-preview {
+    color: #333;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+  }
+
+  .journal-actions {
+    display: flex;
+    gap: 0.5rem;
+
+    button {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+
+    .btn-edit {
+      background: #2196f3;
+      color: white;
+
+      &:hover {
+        background: #1976d2;
+      }
+    }
+
+    .btn-delete {
+      background: #f44336;
+      color: white;
+
+      &:hover {
+        background: #d32f2f;
+      }
+    }
+  }
+}
+</style>

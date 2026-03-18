@@ -1,11 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import bookApi from '../services/bookService';
 
 export const useBookStore = defineStore('books', () => {
-  const books = ref([]);
-  const loading = ref(false);
-  const error = ref(null);
+  const books = ref(JSON.parse(localStorage.getItem('books') || '[]'));
 
   // Filter state
   const searchQuery = ref('');
@@ -16,77 +13,82 @@ export const useBookStore = defineStore('books', () => {
   const defaultGenres = ref(['诗歌', '小说', '散文', '戏剧']);
   const defaultThemes = ref(['历史', '现实', '农村', '都市', '军旅', '爱情', '悬疑', '科幻', '玄幻', '儿童', '武侠']);
 
-  // Fetch books from API
-  const fetchBooks = async (params = {}) => {
-    loading.value = true;
-    error.value = null;
-    try {
-      const response = await bookApi.getAllBooks(params);
-      books.value = response.data || [];
-      return response;
-    } catch (err) {
-      error.value = err.message;
-      console.error('Failed to fetch books:', err);
-      throw err;
-    } finally {
-      loading.value = false;
+  const saveToStorage = () => {
+    localStorage.setItem('books', JSON.stringify(books.value));
+  };
+
+  // Initialize with dummy data if no books exist
+  const initializeDummyData = () => {
+    if (books.value.length === 0) {
+      const dummyBooks = [
+        {
+          id: 1,
+          title: "三体",
+          author: "刘慈欣",
+          genre: "小说",
+          theme: "科幻",
+          cover: "https://picsum.photos/200/300?random=1",
+          tags: ["中国文学", "科幻"],
+          description: "一部关于宇宙文明的科幻巨作。"
+        },
+        {
+          id: 2,
+          title: "红楼梦",
+          author: "曹雪芹",
+          genre: "小说",
+          theme: "历史",
+          cover: "https://picsum.photos/200/300?random=2",
+          tags: ["中国文学", "经典"],
+          description: "描绘清代贵族家庭生活的经典小说。"
+        },
+        {
+          id: 3,
+          title: "西游记",
+          author: "吴承恩",
+          genre: "小说",
+          theme: "玄幻",
+          cover: "https://picsum.photos/200/300?random=3",
+          tags: ["中国文学", "神话"],
+          description: "讲述孙悟空取经故事的神话小说。"
+        },
+        {
+          id: 4,
+          title: "诗经",
+          author: "佚名",
+          genre: "诗歌",
+          theme: "历史",
+          cover: "https://picsum.photos/200/300?random=4",
+          tags: ["古典文学", "诗歌"],
+          description: "中国最早的诗歌总集。"
+        }
+      ];
+      books.value = dummyBooks;
+      saveToStorage();
+    }
+  };
+          
+
+  const addBook = (book) => {
+    book.id = Date.now();
+    books.value.push(book);
+    saveToStorage();
+  };
+
+  const updateBook = (id, updatedBook) => {
+    const index = books.value.findIndex(b => b.id === id);
+    if (index !== -1) {
+      books.value[index] = { ...books.value[index], ...updatedBook };
+      saveToStorage();
     }
   };
 
-  const addBook = async (bookData) => {
-    loading.value = true;
-    error.value = null;
-    try {
-      const response = await bookApi.createBook(bookData);
-      const newBook = response.data;
-      books.value.push(newBook);
-      return newBook;
-    } catch (err) {
-      error.value = err.message;
-      console.error('Failed to add book:', err);
-      throw err;
-    } finally {
-      loading.value = false;
-    }
-  };
-
-  const updateBook = async (id, updatedBook) => {
-    loading.value = true;
-    error.value = null;
-    try {
-      const response = await bookApi.updateBook(id, updatedBook);
-      const book = response.data;
-      const index = books.value.findIndex(b => b._id === id || b.id === id);
-      if (index !== -1) {
-        books.value[index] = book;
-      }
-      return book;
-    } catch (err) {
-      error.value = err.message;
-      console.error('Failed to update book:', err);
-      throw err;
-    } finally {
-      loading.value = false;
-    }
-  };
-
-  const deleteBook = async (id) => {
-    loading.value = true;
-    error.value = null;
-    try {
-      const response = await bookApi.deleteBook(id);
-      books.value = books.value.filter(b => b._id !== id && b.id !== id);
-    } catch (err) {
-      error.value = err.message;
-      console.error('Failed to delete book:', err);
-      throw err;
-    } finally {
-      loading.value = false;
-    }
+  const deleteBook = (id) => {
+    books.value = books.value.filter(b => b.id !== id);
+    saveToStorage();
   };
 
   const getBookById = (id) => {
-    return books.value.find(b => b._id === id || b.id === id);
+    return books.value.find(b => b.id === id);
   };
 
   // Filter-related computed properties
@@ -182,6 +184,7 @@ export const useBookStore = defineStore('books', () => {
       }
       return book;
     });
+    saveToStorage();
   };
 
   const clearAllFilters = () => {
@@ -191,10 +194,11 @@ export const useBookStore = defineStore('books', () => {
     selectedTags.value = [];
   };
 
+  // Initialize dummy data on store creation
+  initializeDummyData();
+
   return {
     books,
-    loading,
-    error,
     searchQuery,
     selectedGenres,
     selectedThemes,
@@ -203,7 +207,6 @@ export const useBookStore = defineStore('books', () => {
     allThemes,
     allTags,
     filteredBooks,
-    fetchBooks,
     addBook,
     updateBook,
     deleteBook,
